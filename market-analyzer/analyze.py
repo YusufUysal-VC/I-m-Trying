@@ -31,6 +31,17 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data_fetcher import fetch_all_timeframes, load_watchlist, get_current_price, get_price_change_pct
+
+# Demo mode data provider
+_DEMO_MODE = False
+def _fetch_all_timeframes_demo(symbol):
+    from src.demo_data import get_demo_data, DEMO_PRICES
+    from src.data_fetcher import TIMEFRAMES
+    results = {}
+    for tf_label, tf_cfg in TIMEFRAMES.items():
+        df = get_demo_data(symbol, tf_cfg["period"], tf_cfg["interval"])
+        results[tf_label] = df
+    return results
 from src.indicators import compute_all_indicators
 from src.trend_analyzer import compute_trend_score, compute_instrument_analysis
 from src.narrative_engine import generate_narratives
@@ -85,7 +96,10 @@ def process_symbol(
     logger.info(f"Processing {symbol}...")
 
     # Step 1: Fetch data
-    all_data = fetch_all_timeframes(symbol)
+    if _DEMO_MODE:
+        all_data = _fetch_all_timeframes_demo(symbol)
+    else:
+        all_data = fetch_all_timeframes(symbol)
     if not any(v is not None for v in all_data.values()):
         logger.warning(f"No data available for {symbol}")
         return _empty_instrument(symbol, display_name, category)
@@ -317,6 +331,7 @@ Examples:
     parser.add_argument("--symbol", type=str, default=None, help="Analyze only this symbol")
     parser.add_argument("--output", type=str, default=None, help="Output HTML file path")
     parser.add_argument("--watchlist", type=str, default=None, help="Path to watchlist.json")
+    parser.add_argument("--demo", action="store_true", help="Use synthetic demo data (no internet required)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     return parser.parse_args()
 
@@ -324,6 +339,12 @@ Examples:
 def main():
     args = parse_args()
     setup_logging(args.verbose)
+
+    global _DEMO_MODE
+    _DEMO_MODE = args.demo
+    if _DEMO_MODE:
+        logger.info("DEMO MODE: using synthetic data (no internet required)")
+
     logger.info("=" * 60)
     logger.info("Market Analyzer starting...")
 

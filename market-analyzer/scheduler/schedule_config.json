@@ -1,0 +1,18 @@
+{
+  "jobs": [
+    {
+      "name": "Sabah Raporu",
+      "cron": "0 9 * * 1-5",
+      "description": "Hafta içi her sabah 09:00'da rapor üret",
+      "ai_enabled": false,
+      "output_dir": "./outputs"
+    },
+    {
+      "name": "Kapanış Raporu",
+      "cron": "0 19 * * 1-5",
+      "description": "Hafta içi her akşam 19:00'da rapor üret",
+      "ai_enabled": true,
+      "output_dir": "./outputs"
+    }
+  ]
+}

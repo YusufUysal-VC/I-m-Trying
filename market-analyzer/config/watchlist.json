@@ -1,0 +1,30 @@
+{
+  "categories": {
+    "BIST Hisseleri": {
+      "symbols": ["THYAO.IS", "ASELS.IS", "EREGL.IS", "GARAN.IS", "SISE.IS"],
+      "currency": "TRY"
+    },
+    "ABD Hisseleri": {
+      "symbols": ["AAPL", "NVDA", "MSFT", "TSLA", "AMZN"],
+      "currency": "USD"
+    },
+    "Kripto Para": {
+      "symbols": ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"],
+      "currency": "USD"
+    },
+    "Forex / Döviz": {
+      "symbols": ["USDTRY=X", "EURUSD=X", "GBPUSD=X", "EURTRY=X"],
+      "currency": "mixed"
+    },
+    "Emtia": {
+      "symbols": ["GC=F", "SI=F", "CL=F", "NG=F"],
+      "currency": "USD",
+      "display_names": {
+        "GC=F": "Altın",
+        "SI=F": "Gümüş",
+        "CL=F": "Ham Petrol",
+        "NG=F": "Doğal Gaz"
+      }
+    }
+  }
+}

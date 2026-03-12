@@ -170,6 +170,15 @@ def analyze_symbol(symbol, tf='3A'):
         return {'error': str(e), 'symbol': symbol}
 
 
+def _clean_series(df, col):
+    """Return x, y lists with NaN values removed."""
+    if col not in df.columns:
+        return [], []
+    mask = df[col].notna()
+    filtered = df[mask]
+    return filtered.index.tolist(), filtered[col].tolist()
+
+
 def create_chart_json(symbol, tf='3A'):
     """Create Plotly chart JSON for a symbol and timeframe."""
     try:
@@ -179,11 +188,34 @@ def create_chart_json(symbol, tf='3A'):
         if df is None or df.empty:
             return json.dumps({'data': [], 'layout': {}})
 
+        # Ensure we have enough data
+        if len(df) < 20:
+            return json.dumps({'data': [], 'layout': {}, 'error': 'Yetersiz veri'})
+
         df = calculate_all(df)
         levels = find_levels(df)
 
-        # Remove timezone info and convert to simple strings
-        df.index = df.index.tz_localize(None) if df.index.tz else df.index
+        # Remove timezone info
+        try:
+            df.index = df.index.tz_localize(None)
+        except TypeError:
+            pass  # Already tz-naive
+
+        # Debug: print column info
+        print(f"[DEBUG] Chart {symbol}/{tf}: {len(df)} rows, columns: {[c for c in df.columns if c not in ['Open','High','Low','Close','Volume','Dividends','Stock Splits']]}")
+        if 'macd' in df.columns:
+            print(f"[DEBUG] MACD range: {df['macd'].min():.4f} to {df['macd'].max():.4f}")
+        if 'macd_hist' in df.columns:
+            print(f"[DEBUG] MACD_hist range: {df['macd_hist'].min():.4f} to {df['macd_hist'].max():.4f}")
+
+        # Drop rows where OHLC has NaN
+        ohlc_mask = df['Open'].notna() & df['Close'].notna() & df['High'].notna() & df['Low'].notna()
+        df = df[ohlc_mask]
+
+        if len(df) < 10:
+            return json.dumps({'data': [], 'layout': {}, 'error': 'Yetersiz veri'})
+
+        x_dates = df.index.tolist()
 
         fig = make_subplots(
             rows=3, cols=1,
@@ -193,34 +225,37 @@ def create_chart_json(symbol, tf='3A'):
             subplot_titles=[f'{symbol}', 'RSI', 'MACD']
         )
 
-        # Candlestick
+        # ── Panel 1: Candlestick ──
         fig.add_trace(go.Candlestick(
-            x=df.index,
-            open=df['Open'], high=df['High'],
-            low=df['Low'], close=df['Close'],
+            x=x_dates,
+            open=df['Open'].tolist(),
+            high=df['High'].tolist(),
+            low=df['Low'].tolist(),
+            close=df['Close'].tolist(),
             increasing=dict(line=dict(color='#00ff88'), fillcolor='#00ff88'),
             decreasing=dict(line=dict(color='#ff4444'), fillcolor='#ff4444'),
             name='Fiyat'
         ), row=1, col=1)
 
-        # EMAs — only plot if data has converged (>50% non-NaN)
-        n = len(df)
-        if 'ema20' in df.columns and df['ema20'].notna().sum() > n * 0.3:
-            fig.add_trace(go.Scatter(x=df.index, y=df['ema20'],
-                line=dict(color='#00aaff', width=1), name='EMA20'), row=1, col=1)
-        if 'ema50' in df.columns and df['ema50'].notna().sum() > n * 0.3:
-            fig.add_trace(go.Scatter(x=df.index, y=df['ema50'],
-                line=dict(color='#ffaa00', width=1.5), name='EMA50'), row=1, col=1)
-        if 'ema200' in df.columns and df['ema200'].notna().sum() > n * 0.2:
-            fig.add_trace(go.Scatter(x=df.index, y=df['ema200'],
-                line=dict(color='#ff4444', width=2), name='EMA200'), row=1, col=1)
+        # EMAs — only plot with cleaned (no NaN) data
+        for col, color, width, label in [
+            ('ema20', '#00aaff', 1, 'EMA20'),
+            ('ema50', '#ffaa00', 1.5, 'EMA50'),
+            ('ema200', '#ff4444', 2, 'EMA200'),
+        ]:
+            cx, cy = _clean_series(df, col)
+            if len(cx) > 10:
+                fig.add_trace(go.Scatter(x=cx, y=cy,
+                    line=dict(color=color, width=width), name=label), row=1, col=1)
 
         # Bollinger Bands
-        if 'bb_upper' in df.columns and df['bb_upper'].notna().sum() > n * 0.3:
-            fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'],
+        bx_u, by_u = _clean_series(df, 'bb_upper')
+        bx_l, by_l = _clean_series(df, 'bb_lower')
+        if len(bx_u) > 10:
+            fig.add_trace(go.Scatter(x=bx_u, y=by_u,
                 line=dict(color='rgba(150,150,150,0.5)', width=1),
                 name='BB Üst', fill=None), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'],
+            fig.add_trace(go.Scatter(x=bx_l, y=by_l,
                 line=dict(color='rgba(150,150,150,0.5)', width=1),
                 name='BB Alt', fill='tonexty',
                 fillcolor='rgba(150,150,150,0.1)'), row=1, col=1)
@@ -233,29 +268,34 @@ def create_chart_json(symbol, tf='3A'):
             fig.add_hline(y=r, line_dash='dash', line_color='rgba(255,68,68,0.5)',
                           line_width=1, row=1, col=1)
 
-        # RSI
-        if 'rsi' in df.columns and df['rsi'].notna().sum() > 5:
-            fig.add_trace(go.Scatter(x=df.index, y=df['rsi'],
+        # ── Panel 2: RSI ──
+        rx, ry = _clean_series(df, 'rsi')
+        if len(rx) > 5:
+            fig.add_trace(go.Scatter(x=rx, y=ry,
                 line=dict(color='#aa44ff', width=1.5), name='RSI'), row=2, col=1)
         fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
                       line_width=1, row=2, col=1)
         fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
                       line_width=1, row=2, col=1)
 
-        # MACD
-        if 'macd_hist' in df.columns and df['macd_hist'].notna().sum() > 5:
-            hist_vals = df['macd_hist'].fillna(0)
-            colors = ['#00ff88' if v >= 0 else '#ff4444' for v in hist_vals]
-            fig.add_trace(go.Bar(x=df.index, y=hist_vals,
+        # ── Panel 3: MACD ──
+        mx_h, my_h = _clean_series(df, 'macd_hist')
+        if len(mx_h) > 5:
+            colors = ['#00ff88' if v >= 0 else '#ff4444' for v in my_h]
+            fig.add_trace(go.Bar(x=mx_h, y=my_h,
                 marker_color=colors, name='MACD Hist'), row=3, col=1)
-        if 'macd' in df.columns and df['macd'].notna().sum() > 5:
-            fig.add_trace(go.Scatter(x=df.index, y=df['macd'],
+
+        mx, my = _clean_series(df, 'macd')
+        if len(mx) > 5:
+            fig.add_trace(go.Scatter(x=mx, y=my,
                 line=dict(color='#00aaff', width=1.5), name='MACD'), row=3, col=1)
-        if 'macd_signal' in df.columns and df['macd_signal'].notna().sum() > 5:
-            fig.add_trace(go.Scatter(x=df.index, y=df['macd_signal'],
+
+        ms, msy = _clean_series(df, 'macd_signal')
+        if len(ms) > 5:
+            fig.add_trace(go.Scatter(x=ms, y=msy,
                 line=dict(color='#ffaa00', width=1), name='Sinyal'), row=3, col=1)
 
-        # Fix Y-axis ranges for RSI panel
+        # ── Layout ──
         fig.update_yaxes(range=[0, 100], row=2, col=1)
 
         fig.update_layout(
@@ -282,8 +322,6 @@ def create_chart_json(symbol, tf='3A'):
 
         fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
         fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
-
-        # Hide x-axis labels for top panels, show only bottom
         fig.update_xaxes(showticklabels=False, row=1, col=1)
         fig.update_xaxes(showticklabels=False, row=2, col=1)
         fig.update_xaxes(showticklabels=True, row=3, col=1)
@@ -291,6 +329,8 @@ def create_chart_json(symbol, tf='3A'):
         return fig.to_json()
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return json.dumps({'data': [], 'layout': {}, 'error': str(e)})
 
 

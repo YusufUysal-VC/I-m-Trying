@@ -1,4 +1,5 @@
 import pandas_ta as ta
+import pandas as pd
 
 
 def calculate_all(df):
@@ -6,37 +7,57 @@ def calculate_all(df):
     if df is None or df.empty or len(df) < 20:
         return df
 
+    close = df['Close']
+
     # RSI (14)
-    df['rsi'] = ta.rsi(df['Close'], length=14)
+    rsi_result = ta.rsi(close, length=14)
+    if rsi_result is not None:
+        df['rsi'] = rsi_result
 
     # MACD (12, 26, 9)
-    macd = ta.macd(df['Close'], fast=12, slow=26, signal=9)
-    if macd is not None and not macd.empty:
-        # Use explicit column names from pandas-ta
-        for col in macd.columns:
-            if col.startswith('MACD_') and not col.startswith('MACDh') and not col.startswith('MACDs'):
-                df['macd'] = macd[col]
-            elif col.startswith('MACDh'):
-                df['macd_hist'] = macd[col]
-            elif col.startswith('MACDs'):
-                df['macd_signal'] = macd[col]
+    try:
+        macd_result = ta.macd(close, fast=12, slow=26, signal=9)
+        if macd_result is not None and not macd_result.empty:
+            cols = list(macd_result.columns)
+            print(f"[DEBUG] MACD columns: {cols}")
+            # Assign by column order: MACD line, histogram, signal
+            # pandas-ta returns: MACD_12_26_9, MACDh_12_26_9, MACDs_12_26_9
+            for col in cols:
+                col_upper = col.upper()
+                if 'MACDH' in col_upper:
+                    df['macd_hist'] = macd_result[col]
+                elif 'MACDS' in col_upper:
+                    df['macd_signal'] = macd_result[col]
+                elif 'MACD' in col_upper:
+                    df['macd'] = macd_result[col]
+    except Exception as e:
+        print(f"[HATA] MACD hesaplama: {e}")
 
     # Bollinger Bands (20, 2)
-    bb = ta.bbands(df['Close'], length=20, std=2)
-    if bb is not None and not bb.empty:
-        for col in bb.columns:
-            if col.startswith('BBU'):
-                df['bb_upper'] = bb[col]
-            elif col.startswith('BBM'):
-                df['bb_mid'] = bb[col]
-            elif col.startswith('BBL'):
-                df['bb_lower'] = bb[col]
+    try:
+        bb_result = ta.bbands(close, length=20, std=2)
+        if bb_result is not None and not bb_result.empty:
+            cols = list(bb_result.columns)
+            print(f"[DEBUG] BBands columns: {cols}")
+            for col in cols:
+                col_upper = col.upper()
+                if 'BBU' in col_upper:
+                    df['bb_upper'] = bb_result[col]
+                elif 'BBM' in col_upper:
+                    df['bb_mid'] = bb_result[col]
+                elif 'BBL' in col_upper:
+                    df['bb_lower'] = bb_result[col]
+    except Exception as e:
+        print(f"[HATA] BBands hesaplama: {e}")
 
     # Moving Averages
-    df['ema20'] = ta.ema(df['Close'], length=20)
-    df['ema50'] = ta.ema(df['Close'], length=50)
-    df['ema200'] = ta.ema(df['Close'], length=200)
-    df['sma20'] = ta.sma(df['Close'], length=20)
+    if len(df) >= 20:
+        df['ema20'] = ta.ema(close, length=20)
+        df['sma20'] = ta.sma(close, length=20)
+    if len(df) >= 50:
+        df['ema50'] = ta.ema(close, length=50)
+    if len(df) >= 200:
+        df['ema200'] = ta.ema(close, length=200)
 
     # Volume EMA
     if 'Volume' in df.columns and df['Volume'].sum() > 0:

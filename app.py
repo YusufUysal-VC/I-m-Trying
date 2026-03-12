@@ -249,20 +249,38 @@ def create_chart_json(symbol, tf='3A'):
             fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['macd_signal'],
                 line=dict(color='#ffaa00', width=1), name='Sinyal'), row=3, col=1)
 
+        # Fix Y-axis ranges for RSI panel
+        fig.update_yaxes(range=[0, 100], row=2, col=1)
+
         fig.update_layout(
             template='plotly_dark',
             paper_bgcolor='#0a0e17',
             plot_bgcolor='#0d1117',
             font=dict(family='IBM Plex Mono, monospace', size=11, color='#c9d1d9'),
             xaxis_rangeslider_visible=False,
+            xaxis2_rangeslider_visible=False,
+            xaxis3_rangeslider_visible=False,
             showlegend=True,
-            legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(size=10)),
-            margin=dict(l=10, r=10, t=30, b=10),
-            height=600
+            legend=dict(
+                bgcolor='rgba(0,0,0,0)',
+                font=dict(size=10),
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1
+            ),
+            margin=dict(l=50, r=10, t=40, b=20),
+            height=650
         )
 
         fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
         fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
+
+        # Hide x-axis labels for top panels, show only bottom
+        fig.update_xaxes(showticklabels=False, row=1, col=1)
+        fig.update_xaxes(showticklabels=False, row=2, col=1)
+        fig.update_xaxes(showticklabels=True, row=3, col=1)
 
         return fig.to_json()
 

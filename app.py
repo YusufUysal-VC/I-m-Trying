@@ -359,12 +359,12 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         for i in range(1, num_rows + 1):
             fig.update_xaxes(showticklabels=(i == num_rows), row=i, col=1)
 
-        return fig.to_json()
+        return fig
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return json.dumps({'data': [], 'layout': {}, 'error': str(e)})
+        return None
 
 
 def score_opportunity(analysis):
@@ -471,11 +471,18 @@ def analyze_all_endpoint():
 def chart(symbol, tf):
     show_rsi = request.args.get('rsi', '0') == '1'
     show_macd = request.args.get('macd', '0') == '1'
-    chart_json = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd)
+    fig = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd)
+    if fig is None:
+        return '<div style="color:#888;text-align:center;padding:40px;">Grafik yüklenemedi</div>'
+    chart_html = fig.to_html(
+        full_html=True,
+        include_plotlyjs='cdn',
+        config={'responsive': True, 'displayModeBar': False}
+    )
     return app.response_class(
-        response=chart_json,
+        response=chart_html,
         status=200,
-        mimetype='application/json'
+        mimetype='text/html'
     )
 
 

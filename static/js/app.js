@@ -111,40 +111,14 @@ async function loadSymbol(symbol) {
 }
 
 // ─── CHART ──────────────────────────────
-async function loadChart(symbol, tf) {
-    try {
-        const enc = encodeURIComponent(symbol);
-        const rsiParam = showRsi ? '1' : '0';
-        const macdParam = showMacd ? '1' : '0';
-        const res = await fetch(`/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}`);
-        const chartJson = await res.json();
+function loadChart(symbol, tf) {
+    const enc = encodeURIComponent(symbol);
+    const rsiParam = showRsi ? '1' : '0';
+    const macdParam = showMacd ? '1' : '0';
+    const url = `/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}`;
 
-        console.log('Chart API response:', {
-            hasData: !!chartJson.data,
-            dataLen: chartJson.data?.length,
-            hasLayout: !!chartJson.layout,
-            error: chartJson.error
-        });
-
-        if (chartJson.error) {
-            document.getElementById('chart-area').innerHTML = `<div class="loading">${chartJson.error}</div>`;
-            return;
-        }
-
-        if (chartJson.data && chartJson.data.length > 0) {
-            const layout = chartJson.layout || {};
-            if (!layout.height) {
-                layout.height = 550;
-            }
-            const config = { responsive: true, displayModeBar: false };
-            Plotly.newPlot('chart-area', chartJson.data, layout, config);
-        } else {
-            document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik verisi yok</div>';
-        }
-    } catch (e) {
-        console.error('Grafik hatası:', e);
-        document.getElementById('chart-area').innerHTML = `<div class="loading">Grafik hatası: ${e.message}</div>`;
-    }
+    document.getElementById('chart-area').innerHTML =
+        `<iframe src="${url}" style="width:100%;height:100%;border:none;background:#0d1117;"></iframe>`;
 }
 
 // ─── INDICATOR TOGGLES ─────────────────

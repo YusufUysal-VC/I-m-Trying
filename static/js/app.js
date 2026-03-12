@@ -3,6 +3,8 @@ let currentSymbol = null;
 let currentTf = '3A';
 let watchlist = {};
 let allAnalyses = [];
+let showRsi = false;
+let showMacd = false;
 
 // ─── INIT ────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -51,7 +53,6 @@ function renderSidebar() {
             const cached = allAnalyses.find(a => a.symbol === inst.symbol);
             const signal = cached?.signal || { emoji: '⚪', signal: '...', color: '#888' };
             const changePct = cached?.change_pct ?? 0;
-            const changeClass = changePct >= 0 ? 'up' : 'down';
             const changeColor = changePct >= 0 ? 'var(--green)' : 'var(--red)';
 
             card.innerHTML = `
@@ -63,7 +64,7 @@ function renderSidebar() {
                     <span class="signal-badge" style="background: ${signal.color}22; color: ${signal.color}">
                         ${signal.emoji} ${signal.signal}
                     </span>
-                    <div style="font-size: 10px; color: ${changeColor}; margin-top: 2px;">
+                    <div style="font-size: 11px; color: ${changeColor}; margin-top: 2px; font-family: var(--font-mono);">
                         ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%
                     </div>
                 </div>
@@ -96,13 +97,13 @@ async function loadSymbol(symbol) {
         const data = await res.json();
 
         if (data.error) {
-            document.getElementById('chart-area').innerHTML = `<div class="loading">Hata: ${data.error}</div>`;
+            document.getElementById('chart-area').innerHTML = `<div class="loading">${data.error}</div>`;
             return;
         }
 
         updateSignalPanel(data);
         updateScenarioPanel(data);
-        loadChart(symbol, currentTf);
+        await loadChart(symbol, currentTf);
     } catch (e) {
         console.error('Analiz hatası:', e);
         document.getElementById('chart-area').innerHTML = '<div class="loading">Bağlantı hatası</div>';
@@ -113,7 +114,9 @@ async function loadSymbol(symbol) {
 async function loadChart(symbol, tf) {
     try {
         const enc = encodeURIComponent(symbol);
-        const res = await fetch(`/api/chart/${enc}/${tf}`);
+        const rsiParam = showRsi ? '1' : '0';
+        const macdParam = showMacd ? '1' : '0';
+        const res = await fetch(`/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}`);
         const chartJson = await res.json();
 
         if (chartJson.data && chartJson.data.length > 0) {
@@ -125,6 +128,25 @@ async function loadChart(symbol, tf) {
     } catch (e) {
         console.error('Grafik hatası:', e);
         document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik yüklenemedi</div>';
+    }
+}
+
+// ─── INDICATOR TOGGLES ─────────────────
+function toggleIndicator(type) {
+    if (type === 'rsi') {
+        showRsi = !showRsi;
+        const btn = document.getElementById('toggleRsi');
+        btn.classList.toggle('active', showRsi);
+        btn.dataset.active = showRsi ? '1' : '0';
+    } else if (type === 'macd') {
+        showMacd = !showMacd;
+        const btn = document.getElementById('toggleMacd');
+        btn.classList.toggle('active', showMacd);
+        btn.dataset.active = showMacd ? '1' : '0';
+    }
+
+    if (currentSymbol) {
+        loadChart(currentSymbol, currentTf);
     }
 }
 
@@ -155,7 +177,7 @@ function updateSignalPanel(data) {
         <div class="signal-main">
             <div class="signal-text" style="color: ${signal.color || '#888'}">${signal.emoji || '⚪'} ${signal.signal || 'NÖTR'}</div>
             <div class="signal-details">
-                <div>Fiyat: ${data.price || 0}</div>
+                <div>Fiyat: <strong>${data.price || 0}</strong></div>
                 <div style="color: ${data.change_pct >= 0 ? 'var(--green)' : 'var(--red)'}">
                     ${data.change_pct >= 0 ? '+' : ''}${(data.change_pct || 0).toFixed(2)}%
                 </div>
@@ -239,14 +261,14 @@ function updateScenarioPanel(data) {
             </div>
         </div>
         ${data.support ? `
-        <div style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;">
+        <div style="margin-top: 14px; display: flex; gap: 20px; flex-wrap: wrap;">
             <div>
-                <span class="stat-label" style="color: var(--green)">DESTEK: </span>
-                <span style="font-size: 11px;">${data.support.map(s => s.toFixed(2)).join(' | ')}</span>
+                <span class="stat-label" style="color: var(--green); font-weight: 700;">DESTEK: </span>
+                <span style="font-size: 12px; font-family: var(--font-mono);">${data.support.map(s => s.toFixed(2)).join(' | ')}</span>
             </div>
             <div>
-                <span class="stat-label" style="color: var(--red)">DİRENÇ: </span>
-                <span style="font-size: 11px;">${data.resistance.map(r => r.toFixed(2)).join(' | ')}</span>
+                <span class="stat-label" style="color: var(--red); font-weight: 700;">DİRENÇ: </span>
+                <span style="font-size: 12px; font-family: var(--font-mono);">${data.resistance.map(r => r.toFixed(2)).join(' | ')}</span>
             </div>
         </div>` : ''}
     `;
@@ -281,7 +303,7 @@ async function loadOpportunities() {
 function renderOpportunities(opps) {
     const container = document.getElementById('opportunities');
     if (!opps || opps.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-dim); font-size: 11px; padding: 12px;">Veri yükleniyor...</div>';
+        container.innerHTML = '<div style="color: var(--text-dim); font-size: 12px; padding: 12px;">Veri yükleniyor...</div>';
         return;
     }
 

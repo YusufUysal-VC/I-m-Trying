@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Market Analyzer</title>
-    <link rel="stylesheet" href="/static/css/bloomberg.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/bloomberg.css?v=5">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 </head>
@@ -52,11 +55,17 @@
             <span class="tf-symbol-label" id="tfSymbolLabel">—</span>
         </div>
 
+        <!-- INDICATOR TOGGLES -->
+        <div class="indicator-toggles">
+            <span class="toggle-label">Indikatörler:</span>
+            <button class="indicator-btn" id="toggleRsi" data-active="0" onclick="toggleIndicator('rsi')">RSI</button>
+            <button class="indicator-btn" id="toggleMacd" data-active="0" onclick="toggleIndicator('macd')">MACD</button>
+        </div>
+
         <!-- CHART -->
         <div class="chart-container">
             <div id="chart-area">
-                <div class="loading">
-                    <div class="loading-spinner"></div>
+                <div class="loading-placeholder">
                     Enstrüman seçin...
                 </div>
             </div>
@@ -99,6 +108,6 @@
     </div>
 </div>
 
-<script src="/static/js/app.js?v=4"></script>
+<script src="/static/js/app.js?v=5"></script>
 </body>
 </html>

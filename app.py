@@ -179,7 +179,7 @@ def _clean_series(df, col):
     return filtered.index.tolist(), filtered[col].tolist()
 
 
-def create_chart_json(symbol, tf='3A'):
+def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
     """Create Plotly chart JSON for a symbol and timeframe."""
     try:
         tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
@@ -201,13 +201,6 @@ def create_chart_json(symbol, tf='3A'):
         except TypeError:
             pass  # Already tz-naive
 
-        # Debug: print column info
-        print(f"[DEBUG] Chart {symbol}/{tf}: {len(df)} rows, columns: {[c for c in df.columns if c not in ['Open','High','Low','Close','Volume','Dividends','Stock Splits']]}")
-        if 'macd' in df.columns:
-            print(f"[DEBUG] MACD range: {df['macd'].min():.4f} to {df['macd'].max():.4f}")
-        if 'macd_hist' in df.columns:
-            print(f"[DEBUG] MACD_hist range: {df['macd_hist'].min():.4f} to {df['macd_hist'].max():.4f}")
-
         # Drop rows where OHLC has NaN
         ohlc_mask = df['Open'].notna() & df['Close'].notna() & df['High'].notna() & df['Low'].notna()
         df = df[ohlc_mask]
@@ -217,12 +210,29 @@ def create_chart_json(symbol, tf='3A'):
 
         x_dates = df.index.tolist()
 
+        # Determine subplot configuration based on active indicators
+        num_rows = 1
+        row_heights = [1.0]
+        subplot_titles = [f'{symbol}']
+
+        if show_rsi:
+            num_rows += 1
+            row_heights = [0.75, 0.25] if not show_macd else [0.60, 0.20, 0.20]
+            subplot_titles.append('RSI')
+        if show_macd:
+            num_rows += 1
+            if not show_rsi:
+                row_heights = [0.75, 0.25]
+            else:
+                row_heights = [0.60, 0.20, 0.20]
+            subplot_titles.append('MACD')
+
         fig = make_subplots(
-            rows=3, cols=1,
+            rows=num_rows, cols=1,
             shared_xaxes=True,
-            row_heights=[0.60, 0.20, 0.20],
+            row_heights=row_heights,
             vertical_spacing=0.03,
-            subplot_titles=[f'{symbol}', 'RSI', 'MACD']
+            subplot_titles=subplot_titles
         )
 
         # ── Panel 1: Candlestick ──
@@ -268,63 +278,86 @@ def create_chart_json(symbol, tf='3A'):
             fig.add_hline(y=r, line_dash='dash', line_color='rgba(255,68,68,0.5)',
                           line_width=1, row=1, col=1)
 
-        # ── Panel 2: RSI ──
-        rx, ry = _clean_series(df, 'rsi')
-        if len(rx) > 5:
-            fig.add_trace(go.Scatter(x=rx, y=ry,
-                line=dict(color='#aa44ff', width=1.5), name='RSI'), row=2, col=1)
-        fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
-                      line_width=1, row=2, col=1)
-        fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
-                      line_width=1, row=2, col=1)
+        # Y-axis: more detailed ticks for price
+        price_min = df['Low'].min()
+        price_max = df['High'].max()
+        price_range = price_max - price_min
+        if price_range > 0:
+            # Calculate nice tick interval for ~15-20 ticks
+            raw_tick = price_range / 15
+            magnitude = 10 ** math.floor(math.log10(raw_tick))
+            nice_ticks = [1, 2, 2.5, 5, 10]
+            dtick = magnitude * min(nice_ticks, key=lambda x: abs(x * magnitude - raw_tick))
+            fig.update_yaxes(dtick=dtick, row=1, col=1)
 
-        # ── Panel 3: MACD ──
-        mx_h, my_h = _clean_series(df, 'macd_hist')
-        if len(mx_h) > 5:
-            colors = ['#00ff88' if v >= 0 else '#ff4444' for v in my_h]
-            fig.add_trace(go.Bar(x=mx_h, y=my_h,
-                marker_color=colors, name='MACD Hist'), row=3, col=1)
+        # Track current row for indicator panels
+        current_row = 2
 
-        mx, my = _clean_series(df, 'macd')
-        if len(mx) > 5:
-            fig.add_trace(go.Scatter(x=mx, y=my,
-                line=dict(color='#00aaff', width=1.5), name='MACD'), row=3, col=1)
+        # ── Panel: RSI (if enabled) ──
+        if show_rsi:
+            rx, ry = _clean_series(df, 'rsi')
+            if len(rx) > 5:
+                fig.add_trace(go.Scatter(x=rx, y=ry,
+                    line=dict(color='#aa44ff', width=1.5), name='RSI'), row=current_row, col=1)
+            fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
+                          line_width=1, row=current_row, col=1)
+            fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
+                          line_width=1, row=current_row, col=1)
+            fig.update_yaxes(range=[0, 100], row=current_row, col=1)
+            current_row += 1
 
-        ms, msy = _clean_series(df, 'macd_signal')
-        if len(ms) > 5:
-            fig.add_trace(go.Scatter(x=ms, y=msy,
-                line=dict(color='#ffaa00', width=1), name='Sinyal'), row=3, col=1)
+        # ── Panel: MACD (if enabled) ──
+        if show_macd:
+            mx_h, my_h = _clean_series(df, 'macd_hist')
+            if len(mx_h) > 5:
+                colors = ['#00ff88' if v >= 0 else '#ff4444' for v in my_h]
+                fig.add_trace(go.Bar(x=mx_h, y=my_h,
+                    marker_color=colors, name='MACD Hist'), row=current_row, col=1)
+
+            mx, my = _clean_series(df, 'macd')
+            if len(mx) > 5:
+                fig.add_trace(go.Scatter(x=mx, y=my,
+                    line=dict(color='#00aaff', width=1.5), name='MACD'), row=current_row, col=1)
+
+            ms, msy = _clean_series(df, 'macd_signal')
+            if len(ms) > 5:
+                fig.add_trace(go.Scatter(x=ms, y=msy,
+                    line=dict(color='#ffaa00', width=1), name='Sinyal'), row=current_row, col=1)
 
         # ── Layout ──
-        fig.update_yaxes(range=[0, 100], row=2, col=1)
+        chart_height = 550 if num_rows == 1 else 650
 
         fig.update_layout(
             template='plotly_dark',
             paper_bgcolor='#0a0e17',
             plot_bgcolor='#0d1117',
-            font=dict(family='IBM Plex Mono, monospace', size=11, color='#c9d1d9'),
+            font=dict(family='Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', size=12, color='#c9d1d9'),
             xaxis_rangeslider_visible=False,
-            xaxis2_rangeslider_visible=False,
-            xaxis3_rangeslider_visible=False,
             showlegend=True,
             legend=dict(
                 bgcolor='rgba(0,0,0,0)',
-                font=dict(size=10),
+                font=dict(size=11),
                 orientation='h',
                 yanchor='bottom',
                 y=1.02,
                 xanchor='right',
                 x=1
             ),
-            margin=dict(l=60, r=10, t=50, b=30),
-            height=650
+            margin=dict(l=65, r=15, t=50, b=30),
+            height=chart_height
         )
+
+        # Hide range sliders for all x-axes
+        for i in range(1, num_rows + 1):
+            axis_name = f'xaxis{i}_rangeslider_visible' if i > 1 else 'xaxis_rangeslider_visible'
+            fig.update_layout(**{axis_name: False})
 
         fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
         fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
-        fig.update_xaxes(showticklabels=False, row=1, col=1)
-        fig.update_xaxes(showticklabels=False, row=2, col=1)
-        fig.update_xaxes(showticklabels=True, row=3, col=1)
+
+        # Only show x-axis tick labels on the bottom panel
+        for i in range(1, num_rows + 1):
+            fig.update_xaxes(showticklabels=(i == num_rows), row=i, col=1)
 
         return fig.to_json()
 
@@ -436,7 +469,9 @@ def analyze_all_endpoint():
 
 @app.route('/api/chart/<path:symbol>/<tf>')
 def chart(symbol, tf):
-    chart_json = create_chart_json(symbol, tf)
+    show_rsi = request.args.get('rsi', '0') == '1'
+    show_macd = request.args.get('macd', '0') == '1'
+    chart_json = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd)
     return app.response_class(
         response=chart_json,
         status=200,

@@ -119,8 +119,19 @@ async function loadChart(symbol, tf) {
         const res = await fetch(`/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}`);
         const chartJson = await res.json();
 
+        console.log('Chart API response:', {
+            hasData: !!chartJson.data,
+            dataLen: chartJson.data?.length,
+            hasLayout: !!chartJson.layout,
+            error: chartJson.error
+        });
+
+        if (chartJson.error) {
+            document.getElementById('chart-area').innerHTML = `<div class="loading">${chartJson.error}</div>`;
+            return;
+        }
+
         if (chartJson.data && chartJson.data.length > 0) {
-            // Ensure layout has proper height
             const layout = chartJson.layout || {};
             if (!layout.height) {
                 layout.height = 550;
@@ -132,7 +143,7 @@ async function loadChart(symbol, tf) {
         }
     } catch (e) {
         console.error('Grafik hatası:', e);
-        document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik yüklenemedi</div>';
+        document.getElementById('chart-area').innerHTML = `<div class="loading">Grafik hatası: ${e.message}</div>`;
     }
 }
 

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Analyzer</title>
+    <link rel="stylesheet" href="/static/css/bloomberg.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+
+<!-- TICKER BAR -->
+<div class="ticker-container">
+    <div class="ticker-track" id="tickerTrack">
+        <span class="ticker-item"><span class="symbol">Yükleniyor...</span></span>
+    </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+    <div class="header-title">MARKET ANALYZER</div>
+    <div class="header-status" id="lastUpdate">Son güncelleme: --:--:--</div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div id="sidebarList"></div>
+        <div class="add-button" onclick="openModal()">+ Enstrüman Ekle</div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+        <!-- OPPORTUNITIES -->
+        <div>
+            <div class="section-title">Günün Fırsatları</div>
+            <div class="opportunities-bar" id="opportunities">
+                <div style="color: var(--text-dim); font-size: 11px; padding: 12px;">Veri yükleniyor...</div>
+            </div>
+        </div>
+
+        <!-- TIMEFRAME TABS -->
+        <div class="tf-bar">
+            <button class="tf-tab" data-tf="1G">1G</button>
+            <button class="tf-tab" data-tf="1H">1H</button>
+            <button class="tf-tab" data-tf="1A">1A</button>
+            <button class="tf-tab active" data-tf="3A">3A</button>
+            <button class="tf-tab" data-tf="1Y">1Y</button>
+            <button class="tf-tab" data-tf="5Y">5Y</button>
+            <span class="tf-symbol-label" id="tfSymbolLabel">—</span>
+        </div>
+
+        <!-- CHART -->
+        <div class="chart-container">
+            <div id="chart-area">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    Enstrüman seçin...
+                </div>
+            </div>
+        </div>
+
+        <!-- SIGNAL PANEL -->
+        <div class="signal-panel" id="signalPanel">
+            <div class="signal-main">
+                <div class="signal-text" style="color: #888">⚪ NÖTR</div>
+            </div>
+            <div></div>
+            <div></div>
+        </div>
+
+        <!-- SCENARIO PANEL -->
+        <div class="scenario-panel" id="scenarioPanel">
+            <div class="scenario-title">Aksiyon Planı</div>
+            <div class="scenario-text" style="color: var(--text-dim);">Enstrüman seçerek analiz görüntüleyin.</div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD INSTRUMENT MODAL -->
+<div id="addModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Enstrüman Ekle</h3>
+        <input type="text" id="symbolInput" placeholder="Ticker (örn: THYAO.IS, BTC-USD)">
+        <input type="text" id="nameInput" placeholder="İsim (örn: Bitcoin)">
+        <select id="categorySelect">
+            <option value="BIST">BIST</option>
+            <option value="ABD">ABD Hisseleri</option>
+            <option value="Kripto">Kripto</option>
+            <option value="Forex">Forex</option>
+            <option value="Emtia">Emtia</option>
+        </select>
+        <div class="modal-buttons">
+            <button class="btn btn-primary" onclick="addInstrument()">Ekle</button>
+            <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -182,40 +182,49 @@ def create_chart_json(symbol, tf='3A'):
         df = calculate_all(df)
         levels = find_levels(df)
 
+        # Convert index to strings for proper Plotly rendering
+        x_vals = [d.strftime('%Y-%m-%d %H:%M') for d in df.index]
+
+        # Drop NaN rows for indicators to avoid broken lines
+        valid_mask = df['Close'].notna()
+
         fig = make_subplots(
             rows=3, cols=1,
             shared_xaxes=True,
             row_heights=[0.60, 0.20, 0.20],
-            vertical_spacing=0.02,
+            vertical_spacing=0.03,
             subplot_titles=[f'{symbol}', 'RSI', 'MACD']
         )
 
         # Candlestick
         fig.add_trace(go.Candlestick(
-            x=df.index.astype(str), open=df['Open'], high=df['High'],
+            x=x_vals, open=df['Open'], high=df['High'],
             low=df['Low'], close=df['Close'],
             increasing_line_color='#00ff88',
             decreasing_line_color='#ff4444',
             name='Fiyat'
         ), row=1, col=1)
 
-        # EMAs
-        if 'ema20' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['ema20'],
-                line=dict(color='#00aaff', width=1), name='EMA20'), row=1, col=1)
-        if 'ema50' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['ema50'],
-                line=dict(color='#ffaa00', width=1.5), name='EMA50'), row=1, col=1)
-        if 'ema200' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['ema200'],
-                line=dict(color='#ff4444', width=2), name='EMA200'), row=1, col=1)
+        # EMAs — only plot if enough non-NaN values exist
+        if 'ema20' in df.columns and df['ema20'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['ema20'],
+                line=dict(color='#00aaff', width=1), name='EMA20',
+                connectgaps=False), row=1, col=1)
+        if 'ema50' in df.columns and df['ema50'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['ema50'],
+                line=dict(color='#ffaa00', width=1.5), name='EMA50',
+                connectgaps=False), row=1, col=1)
+        if 'ema200' in df.columns and df['ema200'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['ema200'],
+                line=dict(color='#ff4444', width=2), name='EMA200',
+                connectgaps=False), row=1, col=1)
 
         # Bollinger Bands
-        if 'bb_upper' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['bb_upper'],
+        if 'bb_upper' in df.columns and df['bb_upper'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['bb_upper'],
                 line=dict(color='rgba(150,150,150,0.5)', width=1),
                 name='BB Üst', fill=None), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['bb_lower'],
+            fig.add_trace(go.Scatter(x=x_vals, y=df['bb_lower'],
                 line=dict(color='rgba(150,150,150,0.5)', width=1),
                 name='BB Alt', fill='tonexty',
                 fillcolor='rgba(150,150,150,0.1)'), row=1, col=1)
@@ -229,24 +238,25 @@ def create_chart_json(symbol, tf='3A'):
                           line_width=1, row=1, col=1)
 
         # RSI
-        if 'rsi' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['rsi'],
+        if 'rsi' in df.columns and df['rsi'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['rsi'],
                 line=dict(color='#aa44ff', width=1.5), name='RSI'), row=2, col=1)
-            fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
-                          line_width=1, row=2, col=1)
-            fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
-                          line_width=1, row=2, col=1)
+        fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
+                      line_width=1, row=2, col=1)
+        fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
+                      line_width=1, row=2, col=1)
 
         # MACD
-        if 'macd_hist' in df.columns:
-            colors = ['#00ff88' if v >= 0 else '#ff4444' for v in df['macd_hist'].fillna(0)]
-            fig.add_trace(go.Bar(x=df.index.astype(str), y=df['macd_hist'],
+        if 'macd_hist' in df.columns and df['macd_hist'].notna().sum() > 5:
+            hist_vals = df['macd_hist'].fillna(0)
+            colors = ['#00ff88' if v >= 0 else '#ff4444' for v in hist_vals]
+            fig.add_trace(go.Bar(x=x_vals, y=hist_vals,
                 marker_color=colors, name='MACD Hist'), row=3, col=1)
-        if 'macd' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['macd'],
+        if 'macd' in df.columns and df['macd'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['macd'],
                 line=dict(color='#00aaff', width=1.5), name='MACD'), row=3, col=1)
-        if 'macd_signal' in df.columns:
-            fig.add_trace(go.Scatter(x=df.index.astype(str), y=df['macd_signal'],
+        if 'macd_signal' in df.columns and df['macd_signal'].notna().sum() > 5:
+            fig.add_trace(go.Scatter(x=x_vals, y=df['macd_signal'],
                 line=dict(color='#ffaa00', width=1), name='Sinyal'), row=3, col=1)
 
         # Fix Y-axis ranges for RSI panel
@@ -270,11 +280,12 @@ def create_chart_json(symbol, tf='3A'):
                 xanchor='right',
                 x=1
             ),
-            margin=dict(l=50, r=10, t=40, b=20),
+            margin=dict(l=60, r=10, t=50, b=30),
             height=650
         )
 
-        fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
+        fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True,
+                         type='category', nticks=10)
         fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
 
         # Hide x-axis labels for top panels, show only bottom

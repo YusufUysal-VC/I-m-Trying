@@ -120,8 +120,13 @@ async function loadChart(symbol, tf) {
         const chartJson = await res.json();
 
         if (chartJson.data && chartJson.data.length > 0) {
+            // Ensure layout has proper height
+            const layout = chartJson.layout || {};
+            if (!layout.height) {
+                layout.height = 550;
+            }
             const config = { responsive: true, displayModeBar: false };
-            Plotly.newPlot('chart-area', chartJson.data, chartJson.layout, config);
+            Plotly.newPlot('chart-area', chartJson.data, layout, config);
         } else {
             document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik verisi yok</div>';
         }

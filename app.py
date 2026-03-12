@@ -359,7 +359,9 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         for i in range(1, num_rows + 1):
             fig.update_xaxes(showticklabels=(i == num_rows), row=i, col=1)
 
-        return fig.to_json()
+        fig_dict = json.loads(fig.to_json())
+        return json.dumps({'data': fig_dict.get('data', []),
+                           'layout': fig_dict.get('layout', {})})
 
     except Exception as e:
         import traceback

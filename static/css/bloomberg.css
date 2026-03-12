@@ -356,7 +356,7 @@ body {
 
 #chart-area {
   width: 100%;
-  min-height: 450px;
+  height: 550px;
 }
 
 /* ─── SIGNAL PANEL ───────────────────────── */

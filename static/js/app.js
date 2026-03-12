@@ -91,7 +91,8 @@ async function loadSymbol(symbol) {
     document.getElementById('chart-area').innerHTML = '<div class="loading"><div class="loading-spinner"></div>Yükleniyor...</div>';
 
     try {
-        const res = await fetch(`/api/analyze/${symbol}?tf=${currentTf}`);
+        const enc = encodeURIComponent(symbol);
+        const res = await fetch(`/api/analyze/${enc}?tf=${currentTf}`);
         const data = await res.json();
 
         if (data.error) {
@@ -111,15 +112,19 @@ async function loadSymbol(symbol) {
 // ─── CHART ──────────────────────────────
 async function loadChart(symbol, tf) {
     try {
-        const res = await fetch(`/api/chart/${symbol}/${tf}`);
+        const enc = encodeURIComponent(symbol);
+        const res = await fetch(`/api/chart/${enc}/${tf}`);
         const chartJson = await res.json();
 
         if (chartJson.data && chartJson.data.length > 0) {
             const config = { responsive: true, displayModeBar: false };
-            Plotly.react('chart-area', chartJson.data, chartJson.layout, config);
+            Plotly.newPlot('chart-area', chartJson.data, chartJson.layout, config);
+        } else {
+            document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik verisi yok</div>';
         }
     } catch (e) {
         console.error('Grafik hatası:', e);
+        document.getElementById('chart-area').innerHTML = '<div class="loading">Grafik yüklenemedi</div>';
     }
 }
 
@@ -327,7 +332,7 @@ async function updateTicker() {
 async function refreshAll() {
     await loadOpportunities();
     if (currentSymbol) {
-        const res = await fetch(`/api/analyze/${currentSymbol}?tf=${currentTf}`);
+        const res = await fetch(`/api/analyze/${encodeURIComponent(currentSymbol)}?tf=${currentTf}`);
         const data = await res.json();
         if (!data.error) {
             updateSignalPanel(data);

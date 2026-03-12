@@ -350,13 +350,18 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px;
-  overflow: hidden;
 }
 
 #chart-area {
   width: 100%;
   height: 550px;
+}
+
+#chart-area iframe {
+  width: 100%;
+  height: 550px;
+  border: none;
+  display: block;
 }
 
 /* ─── SIGNAL PANEL ───────────────────────── */

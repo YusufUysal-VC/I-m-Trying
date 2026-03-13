@@ -1,10 +1,13 @@
 import yfinance as yf
 import json
 import os
+import pandas as pd
 from pathlib import Path
 
 CACHE_DIR = Path(__file__).parent.parent / 'cache'
+OHLCV_CACHE_DIR = CACHE_DIR / 'ohlcv'
 CACHE_DIR.mkdir(exist_ok=True)
+OHLCV_CACHE_DIR.mkdir(exist_ok=True)
 
 TIMEFRAMES = {
     '1G': {'period': '1d', 'interval': '1m'},
@@ -15,30 +18,93 @@ TIMEFRAMES = {
     '5Y': {'period': '5y', 'interval': '1wk'},
 }
 
+# Alternative ticker formats to try when primary fails
+TICKER_ALTERNATIVES = {
+    # If symbol fails, try these suffixes/formats
+    'suffixes': ['', '-USD', '.IS'],
+}
+
+
+def _try_fetch(symbol, period, interval):
+    """Try fetching a single ticker."""
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period=period, interval=interval)
+    if df is not None and not df.empty and len(df) >= 5:
+        return df
+    return None
+
 
 def fetch_data(symbol, tf='3A'):
     """Fetch OHLCV data for a symbol and timeframe."""
     tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(period=tf_config['period'], interval=tf_config['interval'])
-    return df
+    return safe_fetch(symbol, tf_config['period'], tf_config['interval'])
 
 
 def safe_fetch(symbol, period, interval):
-    """Fetch data with fallback to cache."""
+    """Fetch data with alternative ticker formats and OHLCV cache fallback."""
+    # Try primary symbol first
+    try:
+        df = _try_fetch(symbol, period, interval)
+        if df is not None and len(df) >= 5:
+            _save_ohlcv_cache(symbol, period, interval, df)
+            return df
+    except Exception:
+        pass
+
+    # Try alternative formats if primary fails
+    base = symbol.replace('-USD', '').replace('.IS', '')
+    for suffix in TICKER_ALTERNATIVES['suffixes']:
+        alt = base + suffix
+        if alt == symbol:
+            continue
+        try:
+            df = _try_fetch(alt, period, interval)
+            if df is not None and len(df) >= 5:
+                _save_ohlcv_cache(symbol, period, interval, df)
+                return df
+        except Exception:
+            continue
+
+    # Fallback: try with lower min_periods threshold (some ETNs have less data)
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.history(period=period, interval=interval)
+        if df is not None and not df.empty and len(df) >= 2:
+            _save_ohlcv_cache(symbol, period, interval, df)
+            return df
+    except Exception:
+        pass
 
-        if df.empty or len(df) < 20:
-            raise ValueError(f"Yetersiz veri: {symbol}")
+    # Last resort: load OHLCV cache (returns DataFrame, not dict)
+    cached_df = _load_ohlcv_cache(symbol, period, interval)
+    if cached_df is not None:
+        return cached_df
 
-        return df
-    except Exception as e:
-        cached = load_from_cache(symbol)
-        if cached is not None:
-            return cached
-        return None
+    return None
+
+
+def _save_ohlcv_cache(symbol, period, interval, df):
+    """Save OHLCV DataFrame to parquet/csv cache."""
+    safe_name = symbol.replace('=', '_').replace('/', '_')
+    cache_file = OHLCV_CACHE_DIR / f"{safe_name}_{period}_{interval}.csv"
+    try:
+        df.to_csv(cache_file)
+    except Exception:
+        pass
+
+
+def _load_ohlcv_cache(symbol, period, interval):
+    """Load cached OHLCV DataFrame."""
+    safe_name = symbol.replace('=', '_').replace('/', '_')
+    cache_file = OHLCV_CACHE_DIR / f"{safe_name}_{period}_{interval}.csv"
+    if cache_file.exists():
+        try:
+            df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+            if not df.empty:
+                return df
+        except Exception:
+            pass
+    return None
 
 
 def save_to_cache(symbol, data):

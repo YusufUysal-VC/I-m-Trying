@@ -86,7 +86,7 @@ def analyze_symbol(symbol, tf='3A'):
         tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
         df = safe_fetch(symbol, tf_config['period'], tf_config['interval'])
 
-        if df is None or df.empty or len(df) < 20:
+        if df is None or (hasattr(df, 'empty') and df.empty) or len(df) < 5:
             cached = load_from_cache(symbol)
             if cached:
                 return cached
@@ -185,12 +185,12 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
         df = safe_fetch(symbol, tf_config['period'], tf_config['interval'])
 
-        if df is None or df.empty:
-            return json.dumps({'data': [], 'layout': {}})
+        if df is None or (hasattr(df, 'empty') and df.empty):
+            return None
 
         # Ensure we have enough data
-        if len(df) < 20:
-            return json.dumps({'data': [], 'layout': {}, 'error': 'Yetersiz veri'})
+        if len(df) < 5:
+            return None
 
         df = calculate_all(df)
         levels = find_levels(df)
@@ -208,12 +208,14 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         if len(df) < 10:
             return json.dumps({'data': [], 'layout': {}, 'error': 'Yetersiz veri'})
 
-        x_dates = df.index.tolist()
+        # Use sequential integer index to eliminate weekend/holiday gaps
+        x_dates = list(range(len(df)))
+        date_labels = [d.strftime('%d %b') if hasattr(d, 'strftime') else str(d) for d in df.index.tolist()]
 
         # Determine subplot configuration based on active indicators
         num_rows = 1
         row_heights = [1.0]
-        subplot_titles = [f'{symbol}']
+        subplot_titles = ['']  # No title on chart (symbol shown in toolbar)
 
         if show_rsi:
             num_rows += 1
@@ -327,6 +329,12 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         # ── Layout ──
         chart_height = 550 if num_rows == 1 else 650
 
+        # Build tick values/labels for ~12 evenly spaced date labels
+        num_ticks = min(12, len(x_dates))
+        tick_step = max(1, len(x_dates) // num_ticks)
+        tick_vals = list(range(0, len(x_dates), tick_step))
+        tick_text = [date_labels[i] for i in tick_vals]
+
         fig.update_layout(
             template='plotly_dark',
             paper_bgcolor='#0a0e17',
@@ -343,7 +351,7 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
                 xanchor='right',
                 x=1
             ),
-            margin=dict(l=65, r=15, t=50, b=30),
+            margin=dict(l=65, r=15, t=30, b=40),
             height=chart_height
         )
 
@@ -355,9 +363,14 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
         fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
         fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
 
-        # Only show x-axis tick labels on the bottom panel
+        # Only show x-axis tick labels on the bottom panel, using date labels
         for i in range(1, num_rows + 1):
-            fig.update_xaxes(showticklabels=(i == num_rows), row=i, col=1)
+            fig.update_xaxes(
+                showticklabels=(i == num_rows),
+                tickvals=tick_vals if i == num_rows else None,
+                ticktext=tick_text if i == num_rows else None,
+                row=i, col=1
+            )
 
         return fig
 

@@ -309,7 +309,7 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False,
         vol_row = panels.index('volume') + 1 if 'volume' in panels else None
         if vol_row and 'Volume' in df.columns:
             vol_data = df['Volume'].tolist()
-            vol_colors = ['#00ff8866' if c >= o else '#ff444466'
+            vol_colors = ['rgba(0,255,136,0.4)' if c >= o else 'rgba(255,68,68,0.4)'
                           for c, o in zip(df['Close'], df['Open'])]
             fig.add_trace(go.Bar(
                 x=x_dates, y=vol_data,

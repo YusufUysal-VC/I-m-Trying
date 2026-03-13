@@ -26,6 +26,7 @@ BASE_DIR = Path(__file__).parent
 WATCHLIST_FILE = BASE_DIR / 'watchlist.json'
 CACHE_DIR = BASE_DIR / 'cache'
 CACHE_DIR.mkdir(exist_ok=True)
+PORTFOLIO_FILE = BASE_DIR / 'portfolio.json'
 
 last_update_time = None
 
@@ -37,6 +38,18 @@ def load_watchlist():
 
 def save_watchlist(data):
     with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_portfolio():
+    if PORTFOLIO_FILE.exists():
+        with open(PORTFOLIO_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
+
+
+def save_portfolio(data):
+    with open(PORTFOLIO_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -181,7 +194,8 @@ def _clean_series(df, col):
     return positions, values
 
 
-def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=True, show_trend=False):
+def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False,
+                      show_sr=True, show_trend=False, show_volume=True, theme='dark'):
     """Create Plotly chart JSON for a symbol and timeframe."""
     try:
         tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
@@ -219,22 +233,34 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=
         else:
             date_labels = [d.strftime('%d %b') if hasattr(d, 'strftime') else str(d) for d in df.index.tolist()]
 
-        # Determine subplot configuration based on active indicators
-        num_rows = 1
-        row_heights = [1.0]
-        subplot_titles = ['']  # No title on chart (symbol shown in toolbar)
+        # Theme colors
+        is_light = theme == 'light'
+        paper_bg = '#ffffff' if is_light else '#0a0e17'
+        plot_bg = '#f8f9fa' if is_light else '#0d1117'
+        font_color = '#1a1a2e' if is_light else '#c9d1d9'
+        grid_color = 'rgba(0,0,0,0.06)' if is_light else 'rgba(255,255,255,0.05)'
 
+        # Dynamic subplot layout using weights
+        panels = ['price']
+        panel_weights = {'price': 5}
+        subplot_titles = ['']
+
+        if show_volume and 'Volume' in df.columns:
+            panels.append('volume')
+            panel_weights['volume'] = 1
+            subplot_titles.append('')
         if show_rsi:
-            num_rows += 1
-            row_heights = [0.75, 0.25] if not show_macd else [0.60, 0.20, 0.20]
+            panels.append('rsi')
+            panel_weights['rsi'] = 1.5
             subplot_titles.append('RSI')
         if show_macd:
-            num_rows += 1
-            if not show_rsi:
-                row_heights = [0.75, 0.25]
-            else:
-                row_heights = [0.60, 0.20, 0.20]
+            panels.append('macd')
+            panel_weights['macd'] = 1.5
             subplot_titles.append('MACD')
+
+        num_rows = len(panels)
+        total_weight = sum(panel_weights[p] for p in panels)
+        row_heights = [panel_weights[p] / total_weight for p in panels]
 
         fig = make_subplots(
             rows=num_rows, cols=1,
@@ -279,6 +305,19 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=
                 name='BB Alt', fill='tonexty',
                 fillcolor='rgba(150,150,150,0.1)'), row=1, col=1)
 
+        # ── Panel: Volume (if enabled) ──
+        vol_row = panels.index('volume') + 1 if 'volume' in panels else None
+        if vol_row and 'Volume' in df.columns:
+            vol_data = df['Volume'].tolist()
+            vol_colors = ['#00ff8866' if c >= o else '#ff444466'
+                          for c, o in zip(df['Close'], df['Open'])]
+            fig.add_trace(go.Bar(
+                x=x_dates, y=vol_data,
+                marker_color=vol_colors, name='Hacim',
+                showlegend=False
+            ), row=vol_row, col=1)
+            fig.update_yaxes(showticklabels=False, row=vol_row, col=1)
+
         # Support/Resistance lines (toggleable)
         if show_sr:
             for s in levels['support'][:3]:
@@ -314,39 +353,37 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=
             dtick = magnitude * min(nice_ticks, key=lambda x: abs(x * magnitude - raw_tick))
             fig.update_yaxes(dtick=dtick, row=1, col=1)
 
-        # Track current row for indicator panels
-        current_row = 2
-
         # ── Panel: RSI (if enabled) ──
         if show_rsi:
+            rsi_row = panels.index('rsi') + 1
             rx, ry = _clean_series(df, 'rsi')
             if len(rx) > 5:
                 fig.add_trace(go.Scatter(x=rx, y=ry,
-                    line=dict(color='#aa44ff', width=1.5), name='RSI'), row=current_row, col=1)
+                    line=dict(color='#aa44ff', width=1.5), name='RSI'), row=rsi_row, col=1)
             fig.add_hline(y=70, line_dash='dash', line_color='rgba(255,68,68,0.6)',
-                          line_width=1, row=current_row, col=1)
+                          line_width=1, row=rsi_row, col=1)
             fig.add_hline(y=30, line_dash='dash', line_color='rgba(0,255,136,0.6)',
-                          line_width=1, row=current_row, col=1)
-            fig.update_yaxes(range=[0, 100], row=current_row, col=1)
-            current_row += 1
+                          line_width=1, row=rsi_row, col=1)
+            fig.update_yaxes(range=[0, 100], row=rsi_row, col=1)
 
         # ── Panel: MACD (if enabled) ──
         if show_macd:
+            macd_row = panels.index('macd') + 1
             mx_h, my_h = _clean_series(df, 'macd_hist')
             if len(mx_h) > 5:
                 colors = ['#00ff88' if v >= 0 else '#ff4444' for v in my_h]
                 fig.add_trace(go.Bar(x=mx_h, y=my_h,
-                    marker_color=colors, name='MACD Hist'), row=current_row, col=1)
+                    marker_color=colors, name='MACD Hist'), row=macd_row, col=1)
 
             mx, my = _clean_series(df, 'macd')
             if len(mx) > 5:
                 fig.add_trace(go.Scatter(x=mx, y=my,
-                    line=dict(color='#00aaff', width=1.5), name='MACD'), row=current_row, col=1)
+                    line=dict(color='#00aaff', width=1.5), name='MACD'), row=macd_row, col=1)
 
             ms, msy = _clean_series(df, 'macd_signal')
             if len(ms) > 5:
                 fig.add_trace(go.Scatter(x=ms, y=msy,
-                    line=dict(color='#ffaa00', width=1), name='Sinyal'), row=current_row, col=1)
+                    line=dict(color='#ffaa00', width=1), name='Sinyal'), row=macd_row, col=1)
 
         # ── Layout ──
         chart_height = 550 if num_rows == 1 else 650
@@ -358,10 +395,10 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=
         tick_text = [date_labels[i] for i in tick_vals]
 
         fig.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='#0a0e17',
-            plot_bgcolor='#0d1117',
-            font=dict(family='Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', size=12, color='#c9d1d9'),
+            template='plotly_dark' if not is_light else 'plotly_white',
+            paper_bgcolor=paper_bg,
+            plot_bgcolor=plot_bg,
+            font=dict(family='Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', size=12, color=font_color),
             xaxis_rangeslider_visible=False,
             showlegend=True,
             legend=dict(
@@ -382,8 +419,8 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=
             axis_name = f'xaxis{i}_rangeslider_visible' if i > 1 else 'xaxis_rangeslider_visible'
             fig.update_layout(**{axis_name: False})
 
-        fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
-        fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', showgrid=True)
+        fig.update_xaxes(gridcolor=grid_color, showgrid=True)
+        fig.update_yaxes(gridcolor=grid_color, showgrid=True)
 
         # Only show x-axis tick labels on the bottom panel, using date labels
         for i in range(1, num_rows + 1):
@@ -508,7 +545,11 @@ def chart(symbol, tf):
     show_macd = request.args.get('macd', '0') == '1'
     show_sr = request.args.get('sr', '1') == '1'
     show_trend = request.args.get('trend', '0') == '1'
-    fig = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd, show_sr=show_sr, show_trend=show_trend)
+    show_volume = request.args.get('vol', '1') == '1'
+    theme = request.args.get('theme', 'dark')
+    fig = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd,
+                            show_sr=show_sr, show_trend=show_trend,
+                            show_volume=show_volume, theme=theme)
     if fig is None:
         return '<div style="color:#888;text-align:center;padding:40px;">Grafik yüklenemedi</div>'
     chart_html = fig.to_html(
@@ -556,6 +597,62 @@ def ticker():
                     'change_pct': cached.get('change_pct', 0)
                 })
     return jsonify(items)
+
+
+# ─── PORTFOLIO ────────────────────────────────────────────
+
+@app.route('/api/portfolio')
+def get_portfolio():
+    positions = load_portfolio()
+    total_cost = 0
+    total_current = 0
+    for pos in positions:
+        cached = load_from_cache(pos['symbol'])
+        pos['current_price'] = cached.get('price', 0) if cached else 0
+        cost = pos['buy_price'] * pos['quantity']
+        current = pos['current_price'] * pos['quantity']
+        pos['pnl'] = round(current - cost, 2)
+        pos['pnl_pct'] = round((current - cost) / cost * 100, 2) if cost > 0 else 0
+        total_cost += cost
+        total_current += current
+    return jsonify({
+        'positions': positions,
+        'total_cost': round(total_cost, 2),
+        'total_current': round(total_current, 2),
+        'total_pnl': round(total_current - total_cost, 2),
+        'total_pnl_pct': round((total_current - total_cost) / total_cost * 100, 2) if total_cost > 0 else 0
+    })
+
+
+@app.route('/api/portfolio/add', methods=['POST'])
+def add_portfolio():
+    data = request.json
+    symbol = data.get('symbol', '').strip()
+    buy_price = float(data.get('buy_price', 0))
+    quantity = float(data.get('quantity', 0))
+    if not symbol or buy_price <= 0 or quantity <= 0:
+        return jsonify({'error': 'Geçerli sembol, fiyat ve miktar gerekli'}), 400
+    positions = load_portfolio()
+    positions.append({
+        'symbol': symbol,
+        'buy_price': buy_price,
+        'quantity': quantity,
+        'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
+    })
+    save_portfolio(positions)
+    return jsonify({'success': True})
+
+
+@app.route('/api/portfolio/remove', methods=['POST'])
+def remove_portfolio():
+    data = request.json
+    idx = int(data.get('index', -1))
+    positions = load_portfolio()
+    if 0 <= idx < len(positions):
+        positions.pop(idx)
+        save_portfolio(positions)
+        return jsonify({'success': True})
+    return jsonify({'error': 'Geçersiz index'}), 400
 
 
 # ─── SCHEDULER ────────────────────────────────────────────

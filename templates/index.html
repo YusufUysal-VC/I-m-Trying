@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/bloomberg.css?v=21">
+    <link rel="stylesheet" href="/static/css/bloomberg.css?v=22">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 </head>
 <body>
@@ -21,6 +21,17 @@
     </div>
     <div class="topbar-ticker" id="tickerTrack">
         <span class="ticker-item"><span class="symbol">Yükleniyor...</span></span>
+    </div>
+    <div class="topbar-actions">
+        <button class="topbar-btn" id="themeToggle" onclick="toggleTheme()" title="Tema Değiştir">
+            <svg id="themeIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="topbar-btn" id="multiChartBtn" onclick="toggleMultiChart()" title="Çoklu Grafik">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
+        <button class="topbar-btn" onclick="openAlertModal()" title="Fiyat Alarmı">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </button>
     </div>
 </div>
 
@@ -63,15 +74,26 @@
             </div>
         </div>
 
-        <!-- Chart Area -->
-        <div class="chart-wrapper">
+        <!-- Chart Area (single view) -->
+        <div class="chart-wrapper" id="singleChartView">
             <div id="chart-area">
                 <div class="chart-placeholder">Enstrüman seçin</div>
             </div>
         </div>
 
+        <!-- Multi-Chart Area (hidden by default) -->
+        <div class="multi-chart-wrapper hidden" id="multiChartView">
+            <div class="multi-chart-grid">
+                <div class="multi-chart-cell" id="mc0"><div class="chart-placeholder">—</div></div>
+                <div class="multi-chart-cell" id="mc1"><div class="chart-placeholder">—</div></div>
+                <div class="multi-chart-cell" id="mc2"><div class="chart-placeholder">—</div></div>
+                <div class="multi-chart-cell" id="mc3"><div class="chart-placeholder">—</div></div>
+            </div>
+        </div>
+
         <!-- Chart Overlay Toggles -->
         <div class="chart-toggles">
+            <button class="overlay-btn active" id="toggleVol" onclick="toggleOverlay('vol')">Hacim</button>
             <button class="overlay-btn active" id="toggleSr" onclick="toggleOverlay('sr')">Destek/Direnç</button>
             <button class="overlay-btn" id="toggleTrend" onclick="toggleOverlay('trend')">Trend Çizgisi</button>
         </div>
@@ -88,41 +110,80 @@
         </div>
     </div>
 
-    <!-- RIGHT PANEL: Analysis Details -->
+    <!-- RIGHT PANEL: Analysis Details + Portfolio -->
     <div class="panel panel-right">
         <div class="panel-header">
-            <span class="panel-title">Analiz</span>
-        </div>
-
-        <!-- Opportunities Section -->
-        <div class="right-section">
-            <div class="section-label">Fırsatlar</div>
-            <div class="opportunities-list" id="opportunities">
-                <div class="dim-text">Veri yükleniyor...</div>
+            <div class="panel-tabs">
+                <button class="panel-tab active" data-tab="analysis" onclick="switchRightTab('analysis')">Analiz</button>
+                <button class="panel-tab" data-tab="portfolio" onclick="switchRightTab('portfolio')">Portföy</button>
+                <button class="panel-tab" data-tab="alerts" onclick="switchRightTab('alerts')">Alarmlar</button>
             </div>
         </div>
 
-        <!-- Action Plan -->
-        <div class="right-section">
-            <div class="section-label">Aksiyon Planı</div>
-            <div id="scenarioPanel" class="scenario-content">
-                <div class="dim-text">Enstrüman seçerek analiz görüntüleyin.</div>
+        <!-- TAB: Analysis -->
+        <div class="right-tab-content" id="tabAnalysis">
+            <!-- Opportunities Section -->
+            <div class="right-section">
+                <div class="section-label">Fırsatlar</div>
+                <div class="opportunities-list" id="opportunities">
+                    <div class="dim-text">Veri yükleniyor...</div>
+                </div>
+            </div>
+
+            <!-- Action Plan -->
+            <div class="right-section">
+                <div class="section-label">Aksiyon Planı</div>
+                <div id="scenarioPanel" class="scenario-content">
+                    <div class="dim-text">Enstrüman seçerek analiz görüntüleyin.</div>
+                </div>
+            </div>
+
+            <!-- Indicators Detail -->
+            <div class="right-section">
+                <div class="section-label">İndikatörler</div>
+                <div id="indicatorDetail" class="indicator-detail">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
+            <!-- Support/Resistance -->
+            <div class="right-section">
+                <div class="section-label">Destek / Direnç</div>
+                <div id="levelsPanel" class="levels-panel">
+                    <!-- Filled by JS -->
+                </div>
             </div>
         </div>
 
-        <!-- Indicators Detail -->
-        <div class="right-section">
-            <div class="section-label">İndikatörler</div>
-            <div id="indicatorDetail" class="indicator-detail">
-                <!-- Filled by JS -->
+        <!-- TAB: Portfolio -->
+        <div class="right-tab-content hidden" id="tabPortfolio">
+            <div class="right-section">
+                <div class="section-label" style="display:flex; justify-content:space-between; align-items:center">
+                    Portföy Özeti
+                    <button class="icon-btn" onclick="openPortfolioModal()" title="Pozisyon Ekle">+</button>
+                </div>
+                <div id="portfolioSummary" class="portfolio-summary">
+                    <div class="dim-text">Henüz pozisyon yok</div>
+                </div>
+            </div>
+            <div class="right-section">
+                <div class="section-label">Pozisyonlar</div>
+                <div id="portfolioList" class="portfolio-list">
+                    <!-- Filled by JS -->
+                </div>
             </div>
         </div>
 
-        <!-- Support/Resistance -->
-        <div class="right-section">
-            <div class="section-label">Destek / Direnç</div>
-            <div id="levelsPanel" class="levels-panel">
-                <!-- Filled by JS -->
+        <!-- TAB: Alerts -->
+        <div class="right-tab-content hidden" id="tabAlerts">
+            <div class="right-section">
+                <div class="section-label" style="display:flex; justify-content:space-between; align-items:center">
+                    Aktif Alarmlar
+                    <button class="icon-btn" onclick="openAlertModal()" title="Alarm Ekle">+</button>
+                </div>
+                <div id="alertsList" class="alerts-list">
+                    <div class="dim-text">Henüz alarm yok</div>
+                </div>
             </div>
         </div>
     </div>
@@ -148,6 +209,41 @@
     </div>
 </div>
 
-<script src="/static/js/app.js?v=21"></script>
+<!-- ALERT MODAL -->
+<div id="alertModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Fiyat Alarmı Ekle</h3>
+        <input type="text" id="alertSymbolInput" placeholder="Sembol (örn: THYAO.IS)">
+        <div style="display:flex;gap:8px">
+            <select id="alertCondition" style="flex:1">
+                <option value="above">Üstüne Çıkarsa</option>
+                <option value="below">Altına Düşerse</option>
+            </select>
+            <input type="number" id="alertPriceInput" placeholder="Fiyat" step="0.01" style="flex:1">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-primary" onclick="addAlert()">Ekle</button>
+            <button class="btn btn-secondary" onclick="closeAlertModal()">İptal</button>
+        </div>
+    </div>
+</div>
+
+<!-- PORTFOLIO MODAL -->
+<div id="portfolioModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Pozisyon Ekle</h3>
+        <input type="text" id="pfSymbolInput" placeholder="Sembol (örn: THYAO.IS)">
+        <div style="display:flex;gap:8px">
+            <input type="number" id="pfPriceInput" placeholder="Alış Fiyatı" step="0.01" style="flex:1">
+            <input type="number" id="pfQuantityInput" placeholder="Miktar" step="1" style="flex:1">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-primary" onclick="addPortfolioPosition()">Ekle</button>
+            <button class="btn btn-secondary" onclick="closePortfolioModal()">İptal</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js?v=22"></script>
 </body>
 </html>

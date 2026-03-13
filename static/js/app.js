@@ -7,14 +7,21 @@ let showRsi = false;
 let showMacd = false;
 let showSr = true;
 let showTrend = false;
+let showVolume = true;
 let currentData = null;
+let currentTheme = localStorage.getItem('theme') || 'dark';
+let multiChartMode = false;
+let multiChartSymbols = [null, null, null, null];
+let alerts = JSON.parse(localStorage.getItem('priceAlerts') || '[]');
 
 // ─── INIT ────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    applyTheme(currentTheme);
     await loadWatchlist();
     await loadOpportunities();
     updateTicker();
     setupTimeframeTabs();
+    renderAlerts();
 
     setInterval(updateTicker, 30000);
     setInterval(refreshAll, 60000);
@@ -122,14 +129,22 @@ function updateToolbarPrice(data) {
 }
 
 // ─── CHART ──────────────────────────────
-function loadChart(symbol, tf) {
+function buildChartUrl(symbol, tf) {
     const enc = encodeURIComponent(symbol);
-    const rsiParam = showRsi ? '1' : '0';
-    const macdParam = showMacd ? '1' : '0';
-    const srParam = showSr ? '1' : '0';
-    const trendParam = showTrend ? '1' : '0';
-    const url = `/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}&sr=${srParam}&trend=${trendParam}`;
+    const params = new URLSearchParams({
+        rsi: showRsi ? '1' : '0',
+        macd: showMacd ? '1' : '0',
+        sr: showSr ? '1' : '0',
+        trend: showTrend ? '1' : '0',
+        vol: showVolume ? '1' : '0',
+        theme: currentTheme
+    });
+    return `/api/chart/${enc}/${tf}?${params}`;
+}
 
+function loadChart(symbol, tf) {
+    if (multiChartMode) return;
+    const url = buildChartUrl(symbol, tf);
     document.getElementById('chart-area').innerHTML =
         `<iframe src="${url}"></iframe>`;
 }
@@ -143,7 +158,11 @@ function toggleIndicator(type) {
         showMacd = !showMacd;
         document.getElementById('toggleMacd').classList.toggle('active', showMacd);
     }
-    if (currentSymbol) loadChart(currentSymbol, currentTf);
+    if (multiChartMode) {
+        refreshMultiCharts();
+    } else if (currentSymbol) {
+        loadChart(currentSymbol, currentTf);
+    }
 }
 
 // ─── OVERLAY TOGGLES ────────────────────
@@ -154,8 +173,15 @@ function toggleOverlay(type) {
     } else if (type === 'trend') {
         showTrend = !showTrend;
         document.getElementById('toggleTrend').classList.toggle('active', showTrend);
+    } else if (type === 'vol') {
+        showVolume = !showVolume;
+        document.getElementById('toggleVol').classList.toggle('active', showVolume);
     }
-    if (currentSymbol) loadChart(currentSymbol, currentTf);
+    if (multiChartMode) {
+        refreshMultiCharts();
+    } else if (currentSymbol) {
+        loadChart(currentSymbol, currentTf);
+    }
 }
 
 // ─── TIMEFRAME TABS ─────────────────────
@@ -383,9 +409,302 @@ async function updateTicker() {
     }
 }
 
+// ─── THEME ─────────────────────────────
+function toggleTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', currentTheme);
+    applyTheme(currentTheme);
+    // Reload chart with new theme
+    if (multiChartMode) {
+        refreshMultiCharts();
+    } else if (currentSymbol) {
+        loadChart(currentSymbol, currentTf);
+    }
+}
+
+function applyTheme(theme) {
+    document.body.classList.toggle('light-theme', theme === 'light');
+    const icon = document.getElementById('themeIcon');
+    if (theme === 'light') {
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    } else {
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    }
+}
+
+// ─── MULTI-CHART ───────────────────────
+function toggleMultiChart() {
+    multiChartMode = !multiChartMode;
+    document.getElementById('multiChartBtn').classList.toggle('active', multiChartMode);
+    document.getElementById('singleChartView').classList.toggle('hidden', multiChartMode);
+    document.getElementById('multiChartView').classList.toggle('hidden', !multiChartMode);
+
+    if (multiChartMode) {
+        // Fill with first 4 symbols from watchlist
+        const allSymbols = [];
+        for (const instruments of Object.values(watchlist)) {
+            for (const inst of instruments) {
+                allSymbols.push(inst.symbol);
+            }
+        }
+        for (let i = 0; i < 4; i++) {
+            multiChartSymbols[i] = allSymbols[i] || null;
+        }
+        // If current symbol is in list, put it first
+        if (currentSymbol) {
+            const idx = multiChartSymbols.indexOf(currentSymbol);
+            if (idx > 0) {
+                multiChartSymbols.splice(idx, 1);
+                multiChartSymbols.unshift(currentSymbol);
+                multiChartSymbols = multiChartSymbols.slice(0, 4);
+            } else if (idx === -1) {
+                multiChartSymbols[0] = currentSymbol;
+            }
+        }
+        refreshMultiCharts();
+    }
+}
+
+function refreshMultiCharts() {
+    for (let i = 0; i < 4; i++) {
+        const cell = document.getElementById(`mc${i}`);
+        const sym = multiChartSymbols[i];
+        if (sym) {
+            const url = buildChartUrl(sym, currentTf);
+            cell.innerHTML = `<span class="mc-label">${sym.replace('.IS', '')}</span><iframe src="${url}"></iframe>`;
+        } else {
+            cell.innerHTML = '<div class="chart-placeholder">—</div>';
+        }
+    }
+}
+
+// ─── RIGHT PANEL TABS ──────────────────
+function switchRightTab(tab) {
+    document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+
+    document.getElementById('tabAnalysis').classList.toggle('hidden', tab !== 'analysis');
+    document.getElementById('tabPortfolio').classList.toggle('hidden', tab !== 'portfolio');
+    document.getElementById('tabAlerts').classList.toggle('hidden', tab !== 'alerts');
+
+    if (tab === 'portfolio') loadPortfolio();
+}
+
+// ─── PORTFOLIO ─────────────────────────
+async function loadPortfolio() {
+    try {
+        const res = await fetch('/api/portfolio');
+        const data = await res.json();
+        renderPortfolio(data);
+    } catch (e) {
+        console.error('Portföy yüklenemedi:', e);
+    }
+}
+
+function renderPortfolio(data) {
+    const summary = document.getElementById('portfolioSummary');
+    const list = document.getElementById('portfolioList');
+
+    if (!data.positions || data.positions.length === 0) {
+        summary.innerHTML = '<div class="dim-text" style="grid-column:1/-1">Henüz pozisyon yok</div>';
+        list.innerHTML = '';
+        return;
+    }
+
+    const pnlColor = data.total_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    const pnlSign = data.total_pnl >= 0 ? '+' : '';
+
+    summary.innerHTML = `
+        <div class="pf-summary-card">
+            <div class="pf-label">Toplam Maliyet</div>
+            <div class="pf-value">${data.total_cost.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
+        </div>
+        <div class="pf-summary-card">
+            <div class="pf-label">Güncel Değer</div>
+            <div class="pf-value">${data.total_current.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
+        </div>
+        <div class="pf-summary-card">
+            <div class="pf-label">Toplam K/Z</div>
+            <div class="pf-value" style="color:${pnlColor}">${pnlSign}${data.total_pnl.toLocaleString('tr-TR', {minimumFractionDigits: 2})}</div>
+        </div>
+        <div class="pf-summary-card">
+            <div class="pf-label">K/Z %</div>
+            <div class="pf-value" style="color:${pnlColor}">${pnlSign}${data.total_pnl_pct.toFixed(2)}%</div>
+        </div>
+    `;
+
+    list.innerHTML = data.positions.map((pos, i) => {
+        const color = pos.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+        const sign = pos.pnl >= 0 ? '+' : '';
+        return `
+            <div class="pf-row">
+                <div>
+                    <div class="pf-sym">${pos.symbol.replace('.IS', '')}</div>
+                    <div class="pf-detail">${pos.quantity} adet @ ${pos.buy_price.toFixed(2)}</div>
+                </div>
+                <div class="pf-pnl" style="color:${color}">
+                    ${sign}${pos.pnl.toFixed(2)}<br>
+                    <span style="font-size:10px">${sign}${pos.pnl_pct.toFixed(2)}%</span>
+                </div>
+                <button class="pf-remove" onclick="removePortfolio(${i})" title="Sil">✕</button>
+            </div>
+        `;
+    }).join('');
+}
+
+function openPortfolioModal() {
+    document.getElementById('portfolioModal').classList.remove('hidden');
+    if (currentSymbol) {
+        document.getElementById('pfSymbolInput').value = currentSymbol;
+        if (currentData?.price) {
+            document.getElementById('pfPriceInput').value = currentData.price;
+        }
+    }
+}
+
+function closePortfolioModal() {
+    document.getElementById('portfolioModal').classList.add('hidden');
+    document.getElementById('pfSymbolInput').value = '';
+    document.getElementById('pfPriceInput').value = '';
+    document.getElementById('pfQuantityInput').value = '';
+}
+
+async function addPortfolioPosition() {
+    const symbol = document.getElementById('pfSymbolInput').value.trim();
+    const buy_price = document.getElementById('pfPriceInput').value;
+    const quantity = document.getElementById('pfQuantityInput').value;
+
+    if (!symbol || !buy_price || !quantity) {
+        alert('Tüm alanları doldurun!');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/portfolio/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol, buy_price, quantity })
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        closePortfolioModal();
+        loadPortfolio();
+    } catch (e) {
+        alert('Hata: ' + e.message);
+    }
+}
+
+async function removePortfolio(index) {
+    try {
+        await fetch('/api/portfolio/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ index })
+        });
+        loadPortfolio();
+    } catch (e) {
+        console.error('Pozisyon silinemedi:', e);
+    }
+}
+
+// ─── PRICE ALERTS ──────────────────────
+function openAlertModal() {
+    document.getElementById('alertModal').classList.remove('hidden');
+    if (currentSymbol) {
+        document.getElementById('alertSymbolInput').value = currentSymbol;
+    }
+    // Switch to alerts tab
+    switchRightTab('alerts');
+}
+
+function closeAlertModal() {
+    document.getElementById('alertModal').classList.add('hidden');
+    document.getElementById('alertSymbolInput').value = '';
+    document.getElementById('alertPriceInput').value = '';
+}
+
+function addAlert() {
+    const symbol = document.getElementById('alertSymbolInput').value.trim();
+    const condition = document.getElementById('alertCondition').value;
+    const price = parseFloat(document.getElementById('alertPriceInput').value);
+
+    if (!symbol || !price) {
+        alert('Sembol ve fiyat gerekli!');
+        return;
+    }
+
+    alerts.push({ symbol, condition, price, triggered: false });
+    localStorage.setItem('priceAlerts', JSON.stringify(alerts));
+    closeAlertModal();
+    renderAlerts();
+
+    // Request notification permission
+    if (Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+function removeAlert(index) {
+    alerts.splice(index, 1);
+    localStorage.setItem('priceAlerts', JSON.stringify(alerts));
+    renderAlerts();
+}
+
+function renderAlerts() {
+    const container = document.getElementById('alertsList');
+    if (!alerts || alerts.length === 0) {
+        container.innerHTML = '<div class="dim-text">Henüz alarm yok</div>';
+        return;
+    }
+
+    container.innerHTML = alerts.map((a, i) => {
+        const condText = a.condition === 'above' ? '↑' : '↓';
+        const color = a.triggered ? 'var(--text-muted)' : (a.condition === 'above' ? 'var(--green)' : 'var(--red)');
+        return `
+            <div class="alert-row" style="${a.triggered ? 'opacity:0.5' : ''}">
+                <span class="alert-sym">${a.symbol.replace('.IS', '')}</span>
+                <span class="alert-cond" style="color:${color}">${condText} ${a.price.toFixed(2)}</span>
+                <button class="alert-remove" onclick="removeAlert(${i})" title="Sil">✕</button>
+            </div>
+        `;
+    }).join('');
+}
+
+function checkAlerts() {
+    if (!allAnalyses || allAnalyses.length === 0) return;
+    let changed = false;
+
+    alerts.forEach(alert => {
+        if (alert.triggered) return;
+        const data = allAnalyses.find(a => a.symbol === alert.symbol);
+        if (!data) return;
+
+        const price = data.price || 0;
+        const triggered = (alert.condition === 'above' && price >= alert.price) ||
+                          (alert.condition === 'below' && price <= alert.price);
+
+        if (triggered) {
+            alert.triggered = true;
+            changed = true;
+            const direction = alert.condition === 'above' ? 'üstüne çıktı' : 'altına düştü';
+            const msg = `${alert.symbol.replace('.IS', '')} ${alert.price.toFixed(2)} ${direction}! Güncel: ${price.toFixed(2)}`;
+
+            if (Notification.permission === 'granted') {
+                new Notification('Fiyat Alarmı', { body: msg, icon: '/static/favicon.ico' });
+            }
+        }
+    });
+
+    if (changed) {
+        localStorage.setItem('priceAlerts', JSON.stringify(alerts));
+        renderAlerts();
+    }
+}
+
 // ─── REFRESH ALL ────────────────────────
 async function refreshAll() {
     await loadOpportunities();
+    checkAlerts();
     if (currentSymbol) {
         const res = await fetch(`/api/analyze/${encodeURIComponent(currentSymbol)}?tf=${currentTf}`);
         const data = await res.json();
@@ -442,6 +761,7 @@ async function addInstrument() {
 }
 
 document.addEventListener('click', (e) => {
-    const modal = document.getElementById('addModal');
-    if (e.target === modal) closeModal();
+    if (e.target.classList.contains('modal')) {
+        e.target.classList.add('hidden');
+    }
 });

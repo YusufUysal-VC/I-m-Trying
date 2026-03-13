@@ -436,6 +436,7 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False,
     except Exception as e:
         import traceback
         traceback.print_exc()
+        print(f"[CHART HATA] {symbol}: {e}")
         return None
 
 
@@ -551,7 +552,9 @@ def chart(symbol, tf):
                             show_sr=show_sr, show_trend=show_trend,
                             show_volume=show_volume, theme=theme)
     if fig is None:
-        return '<div style="color:#888;text-align:center;padding:40px;">Grafik yüklenemedi</div>'
+        return f'<div style="color:#888;text-align:center;padding:40px;">Grafik yüklenemedi — {symbol} için veri bulunamadı</div>'
+    if isinstance(fig, str):
+        return f'<div style="color:#888;text-align:center;padding:40px;">Yetersiz veri — {symbol}</div>'
     chart_html = fig.to_html(
         full_html=True,
         include_plotlyjs='cdn',

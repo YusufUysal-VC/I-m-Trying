@@ -5,6 +5,8 @@ let watchlist = {};
 let allAnalyses = [];
 let showRsi = false;
 let showMacd = false;
+let showSr = true;
+let showTrend = false;
 let currentData = null;
 
 // ─── INIT ────────────────────────────────
@@ -124,7 +126,9 @@ function loadChart(symbol, tf) {
     const enc = encodeURIComponent(symbol);
     const rsiParam = showRsi ? '1' : '0';
     const macdParam = showMacd ? '1' : '0';
-    const url = `/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}`;
+    const srParam = showSr ? '1' : '0';
+    const trendParam = showTrend ? '1' : '0';
+    const url = `/api/chart/${enc}/${tf}?rsi=${rsiParam}&macd=${macdParam}&sr=${srParam}&trend=${trendParam}`;
 
     document.getElementById('chart-area').innerHTML =
         `<iframe src="${url}"></iframe>`;
@@ -138,6 +142,18 @@ function toggleIndicator(type) {
     } else if (type === 'macd') {
         showMacd = !showMacd;
         document.getElementById('toggleMacd').classList.toggle('active', showMacd);
+    }
+    if (currentSymbol) loadChart(currentSymbol, currentTf);
+}
+
+// ─── OVERLAY TOGGLES ────────────────────
+function toggleOverlay(type) {
+    if (type === 'sr') {
+        showSr = !showSr;
+        document.getElementById('toggleSr').classList.toggle('active', showSr);
+    } else if (type === 'trend') {
+        showTrend = !showTrend;
+        document.getElementById('toggleTrend').classList.toggle('active', showTrend);
     }
     if (currentSymbol) loadChart(currentSymbol, currentTf);
 }

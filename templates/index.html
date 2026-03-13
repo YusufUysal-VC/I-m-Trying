@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/bloomberg.css?v=20">
+    <link rel="stylesheet" href="/static/css/bloomberg.css?v=21">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 </head>
 <body>
@@ -68,6 +68,12 @@
             <div id="chart-area">
                 <div class="chart-placeholder">Enstrüman seçin</div>
             </div>
+        </div>
+
+        <!-- Chart Overlay Toggles -->
+        <div class="chart-toggles">
+            <button class="overlay-btn active" id="toggleSr" onclick="toggleOverlay('sr')">Destek/Direnç</button>
+            <button class="overlay-btn" id="toggleTrend" onclick="toggleOverlay('trend')">Trend Çizgisi</button>
         </div>
 
         <!-- Signal Strip -->
@@ -142,6 +148,6 @@
     </div>
 </div>
 
-<script src="/static/js/app.js?v=20"></script>
+<script src="/static/js/app.js?v=21"></script>
 </body>
 </html>

@@ -171,15 +171,17 @@ def analyze_symbol(symbol, tf='3A'):
 
 
 def _clean_series(df, col):
-    """Return x, y lists with NaN values removed."""
+    """Return x (integer indices), y lists with NaN values removed."""
     if col not in df.columns:
         return [], []
     mask = df[col].notna()
-    filtered = df[mask]
-    return filtered.index.tolist(), filtered[col].tolist()
+    # Return integer positions (not datetime index) for gap-free x-axis
+    positions = [i for i, m in enumerate(mask) if m]
+    values = df[col][mask].tolist()
+    return positions, values
 
 
-def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
+def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False, show_sr=True, show_trend=False):
     """Create Plotly chart JSON for a symbol and timeframe."""
     try:
         tf_config = TIMEFRAMES.get(tf, TIMEFRAMES['3A'])
@@ -210,7 +212,12 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
 
         # Use sequential integer index to eliminate weekend/holiday gaps
         x_dates = list(range(len(df)))
-        date_labels = [d.strftime('%d %b') if hasattr(d, 'strftime') else str(d) for d in df.index.tolist()]
+        # Format labels: include time for intraday timeframes
+        intraday = tf in ('1G', '1H', '1A')
+        if intraday:
+            date_labels = [d.strftime('%H:%M') if hasattr(d, 'strftime') else str(d) for d in df.index.tolist()]
+        else:
+            date_labels = [d.strftime('%d %b') if hasattr(d, 'strftime') else str(d) for d in df.index.tolist()]
 
         # Determine subplot configuration based on active indicators
         num_rows = 1
@@ -272,21 +279,36 @@ def create_chart_json(symbol, tf='3A', show_rsi=False, show_macd=False):
                 name='BB Alt', fill='tonexty',
                 fillcolor='rgba(150,150,150,0.1)'), row=1, col=1)
 
-        # Support/Resistance lines
-        for s in levels['support'][:3]:
-            fig.add_hline(y=s, line_dash='dash', line_color='rgba(0,255,136,0.5)',
-                          line_width=1, row=1, col=1)
-        for r in levels['resistance'][:3]:
-            fig.add_hline(y=r, line_dash='dash', line_color='rgba(255,68,68,0.5)',
-                          line_width=1, row=1, col=1)
+        # Support/Resistance lines (toggleable)
+        if show_sr:
+            for s in levels['support'][:3]:
+                fig.add_hline(y=s, line_dash='dash', line_color='rgba(0,255,136,0.5)',
+                              line_width=1, row=1, col=1)
+            for r in levels['resistance'][:3]:
+                fig.add_hline(y=r, line_dash='dash', line_color='rgba(255,68,68,0.5)',
+                              line_width=1, row=1, col=1)
 
-        # Y-axis: more detailed ticks for price
+        # Trend line (toggleable) — connect first and last significant lows/highs
+        if show_trend and len(df) >= 10:
+            import numpy as np
+            closes = df['Close'].values
+            n = len(closes)
+            x_idx = np.arange(n)
+            # Linear regression on close prices for trend direction
+            slope, intercept = np.polyfit(x_idx, closes, 1)
+            trend_y = [intercept + slope * i for i in range(n)]
+            fig.add_trace(go.Scatter(
+                x=list(range(n)), y=trend_y,
+                line=dict(color='rgba(234,179,8,0.6)', width=2, dash='dot'),
+                name='Trend', showlegend=True
+            ), row=1, col=1)
+
+        # Y-axis: readable tick intervals (~8 ticks)
         price_min = df['Low'].min()
         price_max = df['High'].max()
         price_range = price_max - price_min
         if price_range > 0:
-            # Calculate nice tick interval for ~15-20 ticks
-            raw_tick = price_range / 15
+            raw_tick = price_range / 8
             magnitude = 10 ** math.floor(math.log10(raw_tick))
             nice_ticks = [1, 2, 2.5, 5, 10]
             dtick = magnitude * min(nice_ticks, key=lambda x: abs(x * magnitude - raw_tick))
@@ -484,7 +506,9 @@ def analyze_all_endpoint():
 def chart(symbol, tf):
     show_rsi = request.args.get('rsi', '0') == '1'
     show_macd = request.args.get('macd', '0') == '1'
-    fig = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd)
+    show_sr = request.args.get('sr', '1') == '1'
+    show_trend = request.args.get('trend', '0') == '1'
+    fig = create_chart_json(symbol, tf, show_rsi=show_rsi, show_macd=show_macd, show_sr=show_sr, show_trend=show_trend)
     if fig is None:
         return '<div style="color:#888;text-align:center;padding:40px;">Grafik yüklenemedi</div>'
     chart_html = fig.to_html(

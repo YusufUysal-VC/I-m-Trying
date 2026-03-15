@@ -1,0 +1,30 @@
+{
+  "BIST": [
+    {"symbol": "THYAO.IS", "name": "Türk Hava Yolları"},
+    {"symbol": "GARAN.IS", "name": "Garanti Bankası"},
+    {"symbol": "ASELS.IS", "name": "Aselsan"},
+    {"symbol": "EREGL.IS", "name": "Ereğli Demir Çelik"},
+    {"symbol": "BIMAS.IS", "name": "BİM Mağazaları"}
+  ],
+  "ABD": [
+    {"symbol": "AAPL", "name": "Apple"},
+    {"symbol": "NVDA", "name": "NVIDIA"},
+    {"symbol": "TSLA", "name": "Tesla"},
+    {"symbol": "SPY", "name": "S&P 500 ETF"}
+  ],
+  "Kripto": [
+    {"symbol": "BTC-USD", "name": "Bitcoin"},
+    {"symbol": "ETH-USD", "name": "Ethereum"},
+    {"symbol": "SOL-USD", "name": "Solana"}
+  ],
+  "Forex": [
+    {"symbol": "USDTRY=X", "name": "USD/TRY"},
+    {"symbol": "EURUSD=X", "name": "EUR/USD"},
+    {"symbol": "XAUUSD=X", "name": "Altın/USD"}
+  ],
+  "Emtia": [
+    {"symbol": "GC=F", "name": "Altın Vadeli"},
+    {"symbol": "CL=F", "name": "Ham Petrol"},
+    {"symbol": "SI=F", "name": "Gümüş"}
+  ]
+}
